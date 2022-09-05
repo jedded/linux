@@ -142,10 +142,29 @@ SYM_FUNC_END(dcache_clean_pou)
  *	- end     - kernel end address of region
  */
 SYM_FUNC_START(__pi_dcache_inval_poc)
+/* IAMROOT: arch/arm64/include/asm/assembler.h:320
+ * dcache_line_size - get the safe D-cache line size across all CPUs
+ x2 = dcache_line_size();
+ - x0: start address
+ - x1: end address
+ - x2: cache line size
+ - x3 = x2 -1; ex) cache line size가 64인 경우 0x40 - 1 = 0x3F
+ */
 	dcache_line_size x2, x3
 	sub	x3, x2, #1
+/* IAMROOT:
+tst x1 & x3 -> Z flag (x1:end address & x3:{cache line size - 1})
+ */
 	tst	x1, x3				// end cache line aligned?
+/* IAMROOT:
+x1 = x1 & ~x3 = (x1:end address & ~x3:{cache line size - 1})
+x1:end address 를 cache line size 로 align
+ */
 	bic	x1, x1, x3
+/* IAMROOT:
+위에서 tst x1, x3 결과 Z flag가 1이면 <-- x1:end address가 cache line size 단위에 align 된 주소임
+end address에 대해서 clean & invalidate를 하지 않음
+ */
 	b.eq	1f
 	dc	civac, x1			// clean & invalidate D / U line
 1:	tst	x0, x3				// start cache line aligned?
@@ -153,12 +172,18 @@ SYM_FUNC_START(__pi_dcache_inval_poc)
 	b.eq	2f
 	dc	civac, x0			// clean & invalidate D / U line
 	b	3f
+/* IAMROOT:
+x0:start address 기준으로 cache line invalidate를 수행
+x0:start address를 cache line size 단위로 증가
+x0:start address가 x1:end address와 같을 때까지 수행
+x0:start address, x1:end address는 위에서 cache line size로 align 조정 되었습니다 (bic x0, x0, x3)
+ */
 2:	dc	ivac, x0			// invalidate D / U line
 3:	add	x0, x0, x2
 	cmp	x0, x1
-	b.lo	2b
-	dsb	sy
-	ret
+	b.lo	2b				// x0:start address에서 cache line size로 증가된 값이 x1:end address 보다 작은 경우 2 before로 jump
+	dsb	sy					// PoC full system dsb
+	ret						// b dcache_inval_poc로 호출되었으므로 lr이 저장된 이전 caller로 복귀
 SYM_FUNC_END(__pi_dcache_inval_poc)
 SYM_FUNC_ALIAS(dcache_inval_poc, __pi_dcache_inval_poc)
 

@@ -37,12 +37,20 @@
 
 #include "efi-header.S"
 
+/* IAMROOT:
+KERNEL_START --> 커널 시작 가상 주소(_text)
+arch/arm64/include/asm/memory.h:64
+#define KERNEL_START		_text
+ */
 #define __PHYS_OFFSET	KERNEL_START
 
 #if (PAGE_OFFSET & 0x1fffff) != 0
 #error PAGE_OFFSET must be at least 2MB aligned
 #endif
 
+/* IAMROOT:
+Documentation/arm64/booting.rst 참고
+ */
 /*
  * Kernel startup entry point.
  * ---------------------------
@@ -88,6 +96,27 @@
 	 *  x19/x20    __primary_switch()                       callee preserved temp registers
 	 *  x24        __primary_switch() .. relocate_kernel()  current RELR displacement
 	 */
+/* IAMROOT:
+Documentation/asm-annotations.rst 참고
+include/linux/linkage.h:282
+#define SYM_CODE_START(name)				\
+	SYM_START(name, SYM_L_GLOBAL, SYM_A_ALIGN)
+#define SYM_L_GLOBAL(name)			.globl name
+#define SYM_A_ALIGN				ALIGN
+#define ALIGN __ALIGN
+#define __ALIGN		.align 4,0x90
+#define ASM_NL		 ;
+#define SYM_START(name, linkage, align...)		\
+	SYM_ENTRY(name, linkage, align)
+#define SYM_ENTRY(name, linkage, align...)		\
+	linkage(name) ASM_NL				\
+	align ASM_NL					\
+	name:
+===>
+.globl primary_entry;
+.align 4,0x90;
+primary_entry:
+*/
 SYM_CODE_START(primary_entry)
 	bl	preserve_boot_args
 	bl	init_kernel_el			// w0=cpu_boot_mode
@@ -108,16 +137,46 @@ SYM_CODE_END(primary_entry)
 /*
  * Preserve the arguments passed by the bootloader in x0 .. x3
  */
+/* IAMROOT: Documentation/arm64/booting.rst:159
+- Primary CPU general-purpose register settings:
+    - x0 = physical address of device tree blob (dtb) in system RAM.
+    - x1 = 0 (reserved for future use)
+    - x2 = 0 (reserved for future use)
+    - x3 = 0 (reserved for future use)
+- Secondary CPU general-purpose register settings
+	- x0 = 0 (reserved for future use)
+	- x1 = 0 (reserved for future use)
+	- x2 = 0 (reserved for future use)
+	- x3 = 0 (reserved for future use)
+*/
 SYM_CODE_START_LOCAL(preserve_boot_args)
 	mov	x21, x0				// x21=FDT
 
+/* IAMROOT: arch/arm64/include/asm/assembler.h:192
+ * Pseudo-ops for PC-relative adr/ldr/str <reg>, <symbol> where
+ * <symbol> is within the range +/- 4 GB of the PC.
+x0 = &boot_args[0]
+ */
 	adr_l	x0, boot_args			// record the contents of
+/* IAMROOT:
+boot_args[0] = x21
+boot_args[1] = x1
+boot_args[2] = x2
+boot_args[3] = x3
+ */
 	stp	x21, x1, [x0]			// x0 .. x3 at kernel entry
 	stp	x2, x3, [x0, #16]
 
+/* IAMROOT:
+dcache_inval_poc 호출 전 모든 read & write 완료하도록
+ */
 	dmb	sy				// needed before dc ivac with
 						// MMU off
-
+/* IAMROOT:
+x0 = &boot_args[0]
+x1 = x0 + 32
+dcache_inval_poc(x0, x1)
+ */
 	add	x1, x0, #0x20			// 4 x 8 bytes
 	b	dcache_inval_poc		// tail call
 SYM_CODE_END(preserve_boot_args)
@@ -494,19 +553,19 @@ EXPORT_SYMBOL(kimage_vaddr)
  * booted in EL1 or EL2 respectively.
  */
 SYM_FUNC_START(init_kernel_el)
-	mrs	x0, CurrentEL
-	cmp	x0, #CurrentEL_EL2
+	mrs	x0, CurrentEL				// IAMROOT: MRS <Xt>, CurrentEL : EL, bits [3:2] 0b00 - EL0, 0b01 - EL1, 0b10 - EL2, 0x0b11 - EL3
+	cmp	x0, #CurrentEL_EL2			// IAMROOT: arch/arm64/include/asm/ptrace.h:17 #define CurrentEL_EL2		(2 << 2)
 	b.eq	init_el2
 
 SYM_INNER_LABEL(init_el1, SYM_L_LOCAL)
-	mov_q	x0, INIT_SCTLR_EL1_MMU_OFF
-	msr	sctlr_el1, x0
+	mov_q	x0, INIT_SCTLR_EL1_MMU_OFF	// IAMROOT: arch/arm64/include/asm/sysreg.h:683
+	msr	sctlr_el1, x0					// IAMROOT: SCTLR_EL1 : System Control Register (EL1): MMU, Cache, alignment 검사 같은 아키텍쳐의 주요 기능을 제어
 	isb
-	mov_q	x0, INIT_PSTATE_EL1
+	mov_q	x0, INIT_PSTATE_EL1		// IAMROOT: rch/arm64/include/asm/ptrace.h:19
 	msr	spsr_el1, x0
 	msr	elr_el1, lr
-	mov	w0, #BOOT_CPU_MODE_EL1
-	eret
+	mov	w0, #BOOT_CPU_MODE_EL1		// IAMROOT: arch/arm64/include/asm/virt.h:49
+	eret							// IAMROOT: exception return 하면서 SPSR_EL1 값이 PSTATE로 복원
 
 SYM_INNER_LABEL(init_el2, SYM_L_LOCAL)
 	mov_q	x0, HCR_HOST_NVHE_FLAGS
