@@ -27,6 +27,10 @@ sudo qemu-system-aarch64 -M virt -smp 4 -m 1024 -cpu cortex-a57 -nographic \
 
 - 첫 모임: 2022년 5월 7일 (zoom online)
 
+### 17주차
+- 2022.09.03, Zoom 온라인 (14명 참석)
+- __create_page_tables 완료
+
 ### 16주차
 - 2022.08.27, Zoom 온라인 (11명 참석)
 - 코드로 알아보는 ARM 리눅스 커널 : 2.1.3 ~ 2.1.4
