@@ -327,6 +327,41 @@ SYM_FUNC_START_LOCAL(__create_page_tables)
 	 * the kernel image, and thus are clean to the PoC per the boot
 	 * protocol.
 	 */
+/* IAMROOT:
+[arch/arm64/kernel/vmlinux.lds.S:304]
+. = ALIGN(PAGE_SIZE);
+init_pg_dir = .;
+. += INIT_DIR_SIZE;
+init_pg_end = .;
+[arch/arm64/include/asm/kernel-pgtable.h:89]
+#define INIT_DIR_SIZE (PAGE_SIZE * EARLY_PAGES(KIMAGE_VADDR, _end))
+#define EARLY_PAGES(vstart, vend) ( 1 			/* PGDIR page 				\
+			+ EARLY_PGDS((vstart), (vend)) 	/* each PGDIR needs a next level page table 	\
+			+ EARLY_PUDS((vstart), (vend))	/* each PUD needs a next level page table 	\
+			+ EARLY_PMDS((vstart), (vend)))	/* each PMD needs a next level page table 
+#define EARLY_PGDS(vstart, vend) (EARLY_ENTRIES(vstart, vend, PGDIR_SHIFT))
+#define EARLY_ENTRIES(vstart, vend, shift) \
+	((((vend) - 1) >> (shift)) - ((vstart) >> (shift)) + 1 + EARLY_KASLR)
+[arch/arm64/include/asm/pgtable-hwdef.h:69]
+#define PGDIR_SHIFT		ARM64_HW_PGTABLE_LEVEL_SHIFT(4 - CONFIG_PGTABLE_LEVELS)
+
+[.config]
+CONFIG_PGTABLE_LEVELS=3
+
+[arch/arm64/include/asm/pgtable-hwdef.h:41]
+#define ARM64_HW_PGTABLE_LEVEL_SHIFT(n)	((PAGE_SHIFT - 3) * (4 - (n)) + 3)
+
+#define SWAPPER_PGTABLE_LEVELS	(CONFIG_PGTABLE_LEVELS - 1) // 2
+#if SWAPPER_PGTABLE_LEVELS > 3
+#define EARLY_PUDS(vstart, vend) (EARLY_ENTRIES(vstart, vend, PUD_SHIFT))
+
+#if SWAPPER_PGTABLE_LEVELS > 2
+#define EARLY_PMDS(vstart, vend) (EARLY_ENTRIES(vstart, vend, SWAPPER_TABLE_SHIFT))
+
+[System.map]
+ffffffc008630000 B init_pg_dir
+ffffffc008632000 B init_pg_end
+ */
 	adrp	x0, init_pg_dir
 	adrp	x1, init_pg_end
 	bl	dcache_inval_poc
@@ -623,6 +658,11 @@ SYM_FUNC_END(init_kernel_el)
  * in w0. See arch/arm64/include/asm/virt.h for more info.
  */
 SYM_FUNC_START_LOCAL(set_cpu_boot_mode_flag)
+/* IAMROOT: arch/arm64/include/asm/virt.h:68
+extern u32 __boot_cpu_mode[2];
+아래에서 BOOT_CPU_MODE_EL2, BOOT_CPU_MODE_EL1로 초기화 되며
+boot mode 확인하여 EL1 -> __boot_cpu_mode[0], EL2 -> __boot_cpu_mode[1]에 값을 써서 두 값을 동일하게 맞춤
+ */
 	adr_l	x1, __boot_cpu_mode
 	cmp	w0, #BOOT_CPU_MODE_EL2
 	b.ne	1f
