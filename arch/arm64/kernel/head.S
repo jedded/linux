@@ -66,6 +66,18 @@ Documentation/arm64/booting.rst 참고
  * that are useful before the MMU is enabled. The allocations are described
  * in the entry routines.
  */
+/* IAMROOT: 
+[include/linux/init.h:95]
+#define __HEAD		.section	".head.text","ax"
+[arch/arm64/kernel/vmlinux.lds.S:155]
+SECTIONS
+{
+	. = KIMAGE_VADDR;
+	.head.text : {
+		_text = .;
+		HEAD_TEXT
+	}
+ */
 	__HEAD
 	/*
 	 * DO NOT MODIFY. Image header expected by Linux boot-loaders.
@@ -82,7 +94,23 @@ Documentation/arm64/booting.rst 참고
 	.long	.Lpe_header_offset		// Offset to the PE header.
 
 	__EFI_PE_HEADER
-
+/* IAMROOT: 
+[include/linux/init.h:96]
+#define __INIT		.section	".init.text","ax"
+[include/asm-generic/vmlinux.lds.h:1145]
+#define INIT_TEXT_SECTION(inittext_align)				\
+	. = ALIGN(inittext_align);					\
+	.init.text : AT(ADDR(.init.text) - LOAD_OFFSET) {		\
+		_sinittext = .;						\
+		INIT_TEXT						\
+		_einittext = .;						\
+	}
+[include/asm-generic/vmlinux.lds.h:725]
+#define INIT_TEXT							\
+	*(.init.text .init.text.*)					\
+	*(.text.startup)						\
+	MEM_DISCARD(init.text*)
+ */
 	__INIT
 
 	/*
@@ -184,23 +212,26 @@ SYM_CODE_END(preserve_boot_args)
 /*
  * Macro to create a table entry to the next page.
  *
- *	tbl:	page table address
- *	virt:	virtual address
- *	shift:	#imm page table shift
- *	ptrs:	#imm pointers per table page
+ *	tbl:	page table address            == idmap_pg_dir
+ *	virt:	virtual address               == __idmap_text_start
+ *	shift:	#imm page table shift         == 39
+ *	ptrs:	#imm pointers per table page  == 2^(9) = 512
  *
  * Preserves:	virt
  * Corrupts:	ptrs, tmp1, tmp2
  * Returns:	tbl -> next level table page address
  */
+/* IAMROOT:
+create_table 매크로는 다음 페이지를 가리키는 하나의 엔트리를 생성해, 페이지 테이블에 해당하는 인덱스 위치에 쓴다
+ */
 	.macro	create_table_entry, tbl, virt, shift, ptrs, tmp1, tmp2
-	add	\tmp1, \tbl, #PAGE_SIZE
-	phys_to_pte \tmp2, \tmp1
-	orr	\tmp2, \tmp2, #PMD_TYPE_TABLE	// address of next table and entry type
-	lsr	\tmp1, \virt, #\shift
-	sub	\ptrs, \ptrs, #1
-	and	\tmp1, \tmp1, \ptrs		// table index
-	str	\tmp2, [\tbl, \tmp1, lsl #3]
+	add	\tmp1, \tbl, #PAGE_SIZE         // tmp1 = idmap_pg_dir + 4K
+	phys_to_pte \tmp2, \tmp1            // tmp2 = tmp1 => next pg tbl address
+	orr	\tmp2, \tmp2, #PMD_TYPE_TABLE	// address of next table and entry type, PMD_TYPE_TABLE 11(2)
+	lsr	\tmp1, \virt, #\shift           //  tmp1 = __idmap_text_start  (right shift) 39, __idmap_text_start의 39 비트 이상 주소 => 인덱스?
+	sub	\ptrs, \ptrs, #1                // ptrs (EXTRA_PTRS) = ptrs(EXTRA_PTRS)  - 1  =>   EXTRA_PTRS=512,  512 -1
+	and	\tmp1, \tmp1, \ptrs		// table index, __idmap_text_start의 39 비트 이상 주소 와 511를 비트 and    => tmp1은 인덱스값
+	str	\tmp2, [\tbl, \tmp1, lsl #3]    // tmp2 => [idmap_pg_dir + 바로 위에서 계산된 index , lsl 3]  tmp2는  next pg tbl address + 비트 or 11(2)
 	add	\tbl, \tbl, #PAGE_SIZE		// next level table page
 	.endm
 
@@ -271,13 +302,13 @@ SYM_CODE_END(preserve_boot_args)
  * multiple entries. If a level requires n entries the next page table level is assumed to be
  * formed from n pages.
  *
- *	tbl:	location of page table
- *	rtbl:	address to be used for first level page table entry (typically tbl + PAGE_SIZE)
- *	vstart:	virtual address of start of range
- *	vend:	virtual address of end of range - we map [vstart, vend - 1]
- *	flags:	flags to use to map last level entries
- *	phys:	physical address corresponding to vstart - physical memory is contiguous
- *	pgds:	the number of pgd entries
+ *	tbl(x0):	location of page table == idmap_pg_dir
+ *	rtbl(x1):	address to be used for first level page table entry (typically tbl + PAGE_SIZE)
+ *	vstart(x3):	virtual address of start of range == __idmap_text_start
+ *	vend(x6):	virtual address of end of range - we map [vstart, vend - 1] == __idmap_text_end
+ *	flags(x7):	flags to use to map last level entries == SWAPPER_MM_MMUFLAGS
+ *	phys(x3):	physical address corresponding to vstart - physical memory is contiguous
+ *	pgds(x4):	the number of pgd entries == idmap_ptrs_per_pgd
  *
  * Temporaries:	istart, iend, tmp, count, sv - these need to be different registers
  * Preserves:	vstart, flags
@@ -366,6 +397,17 @@ ffffffc008632000 B init_pg_end
 	adrp	x1, init_pg_end
 	bl	dcache_inval_poc
 
+/* IAMROOT: jake.dothome.co.kr/head-64-60/
+[init_pg_dir = .;]
+. += INIT_DIR_SIZE;
+init_pg_end = .;
+보안 향상을 위해 swapper 페이지 테이블을 read-only로 운영하기 위해 별도로 분리하고,
+커널 초기 부팅 중에만 잠시 사용하기 위해 read-write 가능한 상태로 init 페이지 테이블을 운영한다
+커널 영역(text, data, bss 섹션)에 한정하여 컴파일 타임에 계산
+
+[swapper_pg_dir]
+읽기 전용 커널 페이지 테이블, static으로 만들어지는 pgd 테이블을 제외하곤 필요시 동적으로 생성
+ */
 	/*
 	 * Clear the init page tables.
 	 */
@@ -379,8 +421,47 @@ ffffffc008632000 B init_pg_end
 	subs	x1, x1, #64
 	b.ne	1b
 
+/* IAMROOT:
+#if ARM64_KERNEL_USES_PMD_MAPS
+#define SWAPPER_MM_MMUFLAGS	(PMD_ATTRINDX(MT_NORMAL) | SWAPPER_PMD_FLAGS)
+#ifdef CONFIG_ARM64_4K_PAGES
+#define ARM64_KERNEL_USES_PMD_MAPS 1
+#define SWAPPER_PMD_FLAGS	(PMD_TYPE_SECT | PMD_SECT_AF | PMD_SECT_S)
+ */
 	mov	x7, SWAPPER_MM_MMUFLAGS
 
+/* IAMROOT:
+[idmap_pg_dir] identity map page directory
+MMU enable 시 가상 주소와 물리 주소가 1:1로 매핑되어 사용될 때 필요한 테이블로 영구적으로 사용
+va == pa 이므로 __idmap_text_start를 pa, va 모두 같게 mapping
+MMU를 켜기 위해서는 TTBR에 page table이 설정되어 있어야 한다.
+Swapper page table을 사용하기 위한 중간 과정으로 idmap을 사용한다.
+idmap을 통해 MMU를 켜면 D$를사용할 수 있음.
+
+[arch/arm64/kernel/vmlinux.lds.S:88]
+#define IDMAP_TEXT					\
+	. = ALIGN(SZ_4K);				\
+	__idmap_text_start = .;				\
+	*(.idmap.text)					\
+	__idmap_text_end = .;
+
+	idmap_pg_dir = .;
+	. += IDMAP_DIR_SIZE;
+	idmap_pg_end = .;
+
+[arch/arm64/include/asm/kernel-pgtable.h:90]
+#define IDMAP_DIR_SIZE		(IDMAP_PGTABLE_LEVELS * PAGE_SIZE)
+#if ARM64_KERNEL_USES_PMD_MAPS
+#define IDMAP_PGTABLE_LEVELS	(ARM64_HW_PGTABLE_LEVELS(PHYS_MASK_SHIFT) - 1)
+
+[System.map]
+ffffffc0083d5000 T __idmap_text_start
+ffffffc0083d58f4 T __idmap_text_end
+ffffffc008496000 R idmap_pg_dir
+ffffffc008499000 T idmap_pg_end
+ffffffc00853e158 D idmap_t0sz
+ffffffc00853e160 D idmap_ptrs_per_pgd
+ */
 	/*
 	 * Create the identity mapping.
 	 */
@@ -393,7 +474,21 @@ ffffffc008632000 B init_pg_end
 	mov	x5, #52
 	cbnz	x6, 1f
 #endif
+/* IAMROOT:
+[.config]
+CONFIG_ARM64_VA_BITS=39
+[arch/arm64/include/asm/memory.h:43]
+#define VA_BITS			(CONFIG_ARM64_VA_BITS)
+#define VA_BITS_MIN		(VA_BITS)
+ */
 	mov	x5, #VA_BITS_MIN
+/* IAMROOT: arch/arm64/mm/mmu.c:49
+u64 __section(".mmuoff.data.write") vabits_actual;
+EXPORT_SYMBOL(vabits_actual);
+vabits_actual에 가상 주소 비트 수를 넣는다.
+ID_MMFR2의 VARange 필드의 값에 따라 x5에 52 또는 39를 세팅한다.
+해당 값은 VA의 bit 수를 의미한다.
+ */
 1:
 	adr_l	x6, vabits_actual
 	str	x5, [x6]
@@ -414,17 +509,66 @@ ffffffc008632000 B init_pg_end
 	 */
 	adrp	x5, __idmap_text_end
 	clz	x5, x5
+/* IAMROOT: arch/arm64/include/asm/pgtable-hwdef.h:188
+#define TCR_T0SZ_OFFSET		0
+#define TCR_T1SZ_OFFSET		16
+#define TCR_T0SZ(x)		((UL(64) - (x)) << TCR_T0SZ_OFFSET)
+#define TCR_T1SZ(x)		((UL(64) - (x)) << TCR_T1SZ_OFFSET)
+ */
 	cmp	x5, TCR_T0SZ(VA_BITS_MIN) // default T0SZ small enough?
 	b.ge	1f			// .. then skip VA range extension
 
+/* IAMROOT: arch/arm64/mm/mmu.c:46
+u64 idmap_t0sz = TCR_T0SZ(VA_BITS_MIN);
+                 TCR_T0SZ(39) => 64 - 39 = 25
+ */
 	adr_l	x6, idmap_t0sz
 	str	x5, [x6]
 	dmb	sy
 	dc	ivac, x6		// Invalidate potentially stale cache line
 
 #if (VA_BITS < 48)
-#define EXTRA_SHIFT	(PGDIR_SHIFT + PAGE_SHIFT - 3)
-#define EXTRA_PTRS	(1 << (PHYS_MASK_SHIFT - EXTRA_SHIFT))
+/* IAMROOT:
+[.config]
+CONFIG_PGTABLE_LEVELS=3
+CONFIG_ARM64_PAGE_SHIFT=12
+CONFIG_ARM64_PA_BITS=48
+
+[arch/arm64/include/asm/pgtable-hwdef.h:69]
+#define PGDIR_SHIFT		ARM64_HW_PGTABLE_LEVEL_SHIFT(4 - CONFIG_PGTABLE_LEVELS) // = 30 (4(MAX PGTABLE_LEVELS) - 3단계 PGTABLE_LEVELS)
+
+[arch/arm64/include/asm/page-def.h:14]
+#define PAGE_SHIFT		CONFIG_ARM64_PAGE_SHIFT
+
+[arch/arm64/include/asm/pgtable-hwdef.h:41]
+#define ARM64_HW_PGTABLE_LEVEL_SHIFT(n)	((PAGE_SHIFT - 3) * (4 - (n)) + 3) // (12-3)*(4-1)+3 = 30
+
+[arch/arm64/include/asm/pgtable-hwdef.h:180]
+#define PHYS_MASK_SHIFT		(CONFIG_ARM64_PA_BITS)
+
+Translation table lookup with 4KB pages:
+PGD -> PUD -> PMD -> PTE
++--------+--------+--------+--------+--------+--------+--------+--------+
+|63    56|55    48|47    40|39    32|31    24|23    16|15     8|7      0|
++--------+--------+--------+--------+--------+--------+--------+--------+
+ |                 |         |         |         |         |
+ |                 |         |         |         |         v
+ |                 |         |         |         |   [11:0]  in-page offset
+ |                 |         |         |         +-> [20:12] L3 index (PTE)
+ |                 |         |         +-----------> [29:21] L2 index (PMD)
+ |                 |         +---------------------> [38:30] L1 index (PUD)
+ |                 +-------------------------------> [47:39] L0 index (PGD/P4D)
+ +-------------------------------------------------> [63] TTBR0/1
+8byte로 adddress indexing 하므로 한 PAGE에서 indexing 할 수 있는 개수는
+4096 byte / 8 byte = 512개 == (PAGE_SHIFT - 3)
+VA_BITS 기본값은 39이고, PGTABLE_SHIFT는 30, PAGE_SHIFT는 12이다.
+VA_BITS가 36이고 PAGE_SIZE가 4KB일 때, PGTABLE_LEVELS은 3단계 (9bit + 9bit + 9bit + 12bit)
+PGD, PUD, PMD의 엔트리 개수는 각각 512개이므로 각 9비트의 크기가 인덱싱이 필요하다.
+config PGTABLE_LEVELS
+        default 3 if ARM64_4K_PAGES && ARM64_VA_BITS_39
+ */
+#define EXTRA_SHIFT	(PGDIR_SHIFT + PAGE_SHIFT - 3) // 30+12-3 = 39
+#define EXTRA_PTRS	(1 << (PHYS_MASK_SHIFT - EXTRA_SHIFT)) // 1 << 48-39=9
 
 	/*
 	 * If VA_BITS < 48, we have to configure an additional table level.
@@ -438,6 +582,14 @@ ffffffc008632000 B init_pg_end
 #endif
 
 	mov	x4, EXTRA_PTRS
+/* IAMROOT: Macro to create a table entry to the next page.
+ *	x0, tbl:	page table address            == idmap_pg_dir
+ *	x3, virt:	virtual address               == __idmap_text_start
+ *	EXTRA_SHIFT, shift:	#imm page table shift == 39
+ *	x4, ptrs:	#imm pointers per table page  == 2^(9) = 512
+ * Returns:	tbl -> next level table page address
+	.macro	create_table_entry, tbl, virt, shift, ptrs, tmp1, tmp2
+ */
 	create_table_entry x0, x3, EXTRA_SHIFT, x4, x5, x6
 #else
 	/*
@@ -448,6 +600,12 @@ ffffffc008632000 B init_pg_end
 	str_l	x4, idmap_ptrs_per_pgd, x5
 #endif
 1:
+/* IAMROOT:
+[arch/arm64/mm/mmu.c:47]
+u64 idmap_ptrs_per_pgd = PTRS_PER_PGD;
+[arch/arm64/include/asm/pgtable-hwdef.h:72]
+#define PTRS_PER_PGD		(1 << (VA_BITS - PGDIR_SHIFT)) // 1 << (39 - 30) == 2^9 = 512
+ */
 	ldr_l	x4, idmap_ptrs_per_pgd
 	adr_l	x6, __idmap_text_end		// __pa(__idmap_text_end)
 
