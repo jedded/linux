@@ -416,12 +416,21 @@ SYM_FUNC_START(__cpu_setup)
  	tlbi	vmalle1				// Invalidate local TLB
 	dsb	nsh
 
-	mov	x1, #3 << 20
-	msr	cpacr_el1, x1			// Enable FP/ASIMD
+/* IAMROOT:
+ * - cpacr.fpen : floating point사용시 trap을 off한다는, 즉 사용하겠다는것.
+ * - mdscr.tdcc : EL0가 DCC (Debug Communication Channel) 레지스터 접근시 trap 발생.
+ * - enable_dbg : PSTATE의 DAIF에서 D비트를 클리어 (unmask, 즉 exception 허용).
+ */
+	mov	x1, #3 << 20            // FPEN[21:20] - trap을 발생 시키지 않음
+	msr	cpacr_el1, x1			// Enable FP/ASIMD (Advanced SIMD)
 	mov	x1, #1 << 12			// Reset mdscr_el1 and disable
 	msr	mdscr_el1, x1			// access to the DCC from EL0
 	isb					// Unmask debug exceptions now,
-	enable_dbg				// since this is per-cpu
+	enable_dbg				// since this is per-cpu, msr	daifclr, #8 <-- D bit clear debug 익셉션 허용
+/* IAMROOT:
+PMU - cache miss, TLB miss, CPU cycles, executed instructions
+AMU - dynamic voltage and frequency scaling (DVFS) (ARMv8.3 부터)
+*/
 	reset_pmuserenr_el0 x1			// Disable PMU access from EL0
 	reset_amuserenr_el0 x1			// Disable AMU access from EL0
 
@@ -429,6 +438,12 @@ SYM_FUNC_START(__cpu_setup)
 	 * Default values for VMSA control registers. These will be adjusted
 	 * below depending on detected CPU features.
 	 */
+/* IAMROOT:
+ VMSA - Virtual Memory System Architecture :
+ MAIR - Memory Attribute Indirection Register : 
+ TCR - Translation Control Register :
+ name .req register name - an alias for register name called name
+*/
 	mair	.req	x17
 	tcr	.req	x16
 	mov_q	mair, MAIR_EL1_SET
@@ -444,13 +459,20 @@ SYM_FUNC_START(__cpu_setup)
 	mrs	x10, ID_AA64PFR1_EL1
 	ubfx	x10, x10, #ID_AA64PFR1_MTE_SHIFT, #4
 	cmp	x10, #ID_AA64PFR1_MTE
-	b.lt	1f
+	b.lt	1f                // if(ID_AA64PFR1_EL1[11;8] < 2)
 
 	/* Normal Tagged memory type at the corresponding MAIR index */
-	mov	x10, #MAIR_ATTR_NORMAL_TAGGED
+	mov	x10, #MAIR_ATTR_NORMAL_TAGGED           // If FEAT_MTE2 is implemented Tagged Normal Inner Write-Back, Outer Write-Back, Read-Allocate, Write-Allocate Non-transient memory. Otherwise, UNPREDICTABLE.
 	bfi	mair, x10, #(8 *  MT_NORMAL_TAGGED), #8
 
-	mov	x10, #KERNEL_GCR_EL1
+/* IAMROOT:
+[arch/arm64/include/asm/sysreg.h:1116]
+#define KERNEL_GCR_EL1		(SYS_GCR_EL1_RRND | KERNEL_GCR_EL1_EXCL)
+#define SYS_GCR_EL1_RRND	(BIT(16))
+#define KERNEL_GCR_EL1_EXCL	SYS_GCR_EL1_EXCL_MASK
+#define SYS_GCR_EL1_EXCL_MASK	0xffffUL
+ */
+	mov	x10, #KERNEL_GCR_EL1 // == 0x1ffff ; RRND, bit [16] - an implementation-specific tag value
 	msr_s	SYS_GCR_EL1, x10
 
 	/*
@@ -461,8 +483,8 @@ SYM_FUNC_START(__cpu_setup)
 	 */
 	mrs	x10, CNTVCT_EL0
 	ands	x10, x10, #SYS_RGSR_EL1_SEED_MASK
-	csinc	x10, x10, xzr, ne
-	lsl	x10, x10, #SYS_RGSR_EL1_SEED_SHIFT
+	csinc	x10, x10, xzr, ne                 // if(x10 > 0) x10 = x10; else x10 = 1;
+	lsl	x10, x10, #SYS_RGSR_EL1_SEED_SHIFT    // SEED, bits [23;8] Seed register used for generating values returned by RandomAllocationTag().
 	msr_s	SYS_RGSR_EL1, x10
 
 	/* clear any pending tag check faults in TFSR*_EL1 */
@@ -470,7 +492,7 @@ SYM_FUNC_START(__cpu_setup)
 	msr_s	SYS_TFSRE0_EL1, xzr
 
 	/* set the TCR_EL1 bits */
-	mov_q	x10, TCR_MTE_FLAGS
+	mov_q	x10, TCR_MTE_FLAGS   // TCR_TBI1 [38] | TCR_TBID1 TBI1 [52]
 	orr	tcr, tcr, x10
 1:
 #endif
