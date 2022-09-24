@@ -77,6 +77,11 @@ SECTIONS
 		_text = .;
 		HEAD_TEXT
 	}
+[arch/arm64/include/asm/memory.h:46]
+#define KIMAGE_VADDR		(MODULES_END)
+#define KIMAGE_VADDR		(MODULES_END)
+#define MODULES_END		(MODULES_VADDR + MODULES_VSIZE)
+#define MODULES_VADDR		(_PAGE_END(VA_BITS_MIN))
  */
 	__HEAD
 	/*
@@ -251,6 +256,11 @@ create_table 매크로는 다음 페이지를 가리키는 하나의 엔트리�
  * Corrupts:	index, tmp1
  * Returns:	rtbl
  */
+/* IAMROOT:
+ * - compute_indices에서 구해온 index를 가지고,
+ * 해당 table entry에 해당하는 물리주소(rtbl)의 속성을 더하고 각 table entry에 mapping하는
+ * 역할을 수행한다.
+ */
 	.macro populate_entries, tbl, rtbl, index, eindex, flags, inc, tmp1
 .Lpe\@:	phys_to_pte \tmp1, \rtbl
 	orr	\tmp1, \tmp1, \flags	// tmp1 = table entry
@@ -258,7 +268,7 @@ create_table 매크로는 다음 페이지를 가리키는 하나의 엔트리�
 	add	\rtbl, \rtbl, \inc	// rtbl = pa next level
 	add	\index, \index, #1
 	cmp	\index, \eindex
-	b.ls	.Lpe\@
+	b.ls	.Lpe\@  //.L <== Local 범위, \@ <== 호출 시 마다 +1 숫자 부여하여 구분하도록
 	.endm
 
 /*
@@ -278,6 +288,18 @@ create_table 매크로는 다음 페이지를 가리키는 하나의 엔트리�
  *
  * Preserves:	vstart, vend, shift, ptrs
  * Returns:	istart, iend, count
+ */
+/* IAMROOT:
+ *   - PGD table : entry 값 (count + 1) 이 1이 나옴.
+ *       istart = (vstart >> 39) & (0x1ff)
+ *       iend = (vend >> 39) & (0x1ff)
+ *       count = iend - istart = 0
+ *       table 크기가 작기때문에 보통 entry 값이 한개가 나옴.
+ *
+ *   - PUD table : shift 39값을 30으로 치환해서 계산. 역시 1개의 entry만 나옴
+ *   - PMD table : shift를 21값으로 치환해서 계산. 2MB 범위 이므로 여러개가 나올수있음.
+ *
+ *   그래서 해당 table의 istart, iend, count의 계산 결과 값이 나온다.
  */
 	.macro compute_indices, vstart, vend, shift, ptrs, istart, iend, count
 	lsr	\iend, \vend, \shift
@@ -314,6 +336,20 @@ create_table 매크로는 다음 페이지를 가리키는 하나의 엔트리�
  * Preserves:	vstart, flags
  * Corrupts:	tbl, rtbl, vend, istart, iend, tmp, count, sv
  */
+/* IAMROOT:
+ * - 가상메모리 범위의 page table level의 entry를 초기화 한다.
+ *   현재 SWAPPER_PGTABLE_LEVELS은 3이므로 PGD, PMD, PTE만을 초기화 하게 된다.
+ *   실제로는 PGD, PUD, PMD이지만 code의 통일성을 위해 PGD, PMD, PTE로 되어있다.
+ *
+ *   code(실제) | shift
+ *   ---------------
+ *   PGD(PGD)   : 39
+ *   PMD(PUD)   : 30
+ *   PTE(PMD)   : 21
+ *
+ *   bic : bic A, B, #C ==> A = (B & ~C)
+ * https://developer.arm.com/documentation/101811/0102/Translation-granule
+ */
 	.macro map_memory, tbl, rtbl, vstart, vend, flags, phys, pgds, istart, iend, tmp, count, sv
 	sub \vend, \vend, #1
 	add \rtbl, \tbl, #PAGE_SIZE
@@ -341,7 +377,7 @@ create_table 매크로는 다음 페이지를 가리키는 하나의 엔트리�
 	bic \count, \phys, #SWAPPER_BLOCK_SIZE - 1
 	populate_entries \tbl, \count, \istart, \iend, \flags, #SWAPPER_BLOCK_SIZE, \tmp
 	.endm
-
+	
 /*
  * Setup the initial page tables. We only setup the barest amount which is
  * required to get the kernel running. The following sections are required:
@@ -457,10 +493,12 @@ idmap을 통해 MMU를 켜면 D$를사용할 수 있음.
 [System.map]
 ffffffc0083d5000 T __idmap_text_start
 ffffffc0083d58f4 T __idmap_text_end
-ffffffc008496000 R idmap_pg_dir
+ffffffc008496000 R idmap_pg_dir <-- __idmap_text_start
 ffffffc008499000 T idmap_pg_end
 ffffffc00853e158 D idmap_t0sz
 ffffffc00853e160 D idmap_ptrs_per_pgd
+ffffffc008630000 B init_pg_dir <-- KIMAGE_VADDR
+ffffffc008632000 B init_pg_end
  */
 	/*
 	 * Create the identity mapping.
@@ -609,6 +647,11 @@ u64 idmap_ptrs_per_pgd = PTRS_PER_PGD;
 	ldr_l	x4, idmap_ptrs_per_pgd
 	adr_l	x6, __idmap_text_end		// __pa(__idmap_text_end)
 
+/* IAMROOT:
+map_memory, tbl, rtbl, vstart, vend, flags, phys, pgds, istart, iend, tmp, count, sv
+map_memory x0(tbl), x1(rtbl), x3(vstart), x6(vend), x7(flags), x3(phys), x4(pgds), x10(istart), x11(iend), x12(tmp), x13(count), x14(sv)
+map_memory x0(idmap_pg_dir), x1(rtbl), x3(__idmap_text_start), x6(__idmap_text_end), x7(SWAPPER_MM_MMUFLAGS), x3(phys), x4(idmap_ptrs_per_pgd), x10(istart), x11(iend), x12(tmp), x13(count), x14(sv)
+ */
 	map_memory x0, x1, x3, x6, x7, x3, x4, x10, x11, x12, x13, x14
 
 	/*
@@ -623,6 +666,9 @@ u64 idmap_ptrs_per_pgd = PTRS_PER_PGD;
 	sub	x6, x6, x3			// _end - _text
 	add	x6, x6, x5			// runtime __va(_end)
 
+/* IAMROOT:
+map_memory x0(init_pg_dir), x1(rtbl), x5(KIMAGE_VADDR), x6(_end), x7(SWAPPER_MM_MMUFLAGS), x3(_text), x4(PTRS_PER_PGD), x10(istart), x11(iend), x12(tmp), x13(count), x14(sv)
+ */
 	map_memory x0, x1, x5, x6, x7, x3, x4, x10, x11, x12, x13, x14
 
 	/*

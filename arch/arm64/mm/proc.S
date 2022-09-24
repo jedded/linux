@@ -400,7 +400,20 @@ SYM_FUNC_END(idmap_kpti_install_ng_mappings)
  */
 	.pushsection ".idmap.text", "awx"
 SYM_FUNC_START(__cpu_setup)
-	tlbi	vmalle1				// Invalidate local TLB
+/* IAMROOT
+ * tlbi : Translation Lookaside Buffer Invalidate
+ * VMALLE1 TLB invalidate by VMID, All at stage 1, EL1
+ *   vmall + el1
+ *   VMID : Virtual Machine ID 현재 운영체제
+ *   all : stage1의 모든 TLB Cache  || alls12: stage1, stage2의 모든 tlb cache
+ *   el1 : 현재 level
+ *   is - Inner Sharable
+
+ *   ASID : 특정 ASID에 해당하는 tlb를 지운다는듯.
+ *   VA : ASID + VA
+ *   VAA : any ASID + VA
+ */
+ 	tlbi	vmalle1				// Invalidate local TLB
 	dsb	nsh
 
 	mov	x1, #3 << 20
