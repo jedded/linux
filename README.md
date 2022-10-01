@@ -27,6 +27,11 @@ sudo qemu-system-aarch64 -M virt -smp 4 -m 1024 -cpu cortex-a57 -nographic \
 
 - 첫 모임: 2022년 5월 7일 (zoom online)
 
+### 20주차
+- 2022.10.01, Zoom 온라인 (6명 참석)
+- __cpu_setup@arch/arm64/mm/proc.S 완료
+- __primary_switch 분석 시작
+
 ### 19주차
 - 2022.09.24, Zoom 온라인 (13명 참석)
 -. __cpu_setup@arch/arm64/mm/proc.S 진행 중
