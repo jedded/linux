@@ -452,6 +452,7 @@ AMU - dynamic voltage and frequency scaling (DVFS) (ARMv8.3 부터)
 			TCR_TBI0 | TCR_A1 | TCR_KASAN_SW_FLAGS
 
 #ifdef CONFIG_ARM64_MTE
+// MTE allows the storage of a four-bit "key" in bits 59-56 of a virtual address — the lower "nibble" of the top byte.
 	/*
 	 * Update MAIR_EL1, GCR_EL1 and TFSR*_EL1 if MTE is supported
 	 * (ID_AA64PFR1_EL1[11:8] > 1).
@@ -513,6 +514,10 @@ AMU - dynamic voltage and frequency scaling (DVFS) (ARMv8.3 부터)
 	 */
 	tcr_compute_pa_size tcr, #TCR_IPS_SHIFT, x5, x6
 #ifdef CONFIG_ARM64_HW_AFDBM
+/* IAMROOT:
+ The ARMv8.1 architecture extensions introduce support for hardware updates of the access and dirty information in page table entries. 
+ When enabled in TCR_EL1 (HA and HD bits) on capable processors, accesses to pages with PTE_AF cleared will set this bit instead of raising an access flag fault.
+*/
 	/*
 	 * Enable hardware update of the Access Flags bit.
 	 * Hardware dirty bit management is enabled later,
@@ -529,6 +534,12 @@ AMU - dynamic voltage and frequency scaling (DVFS) (ARMv8.3 부터)
 	/*
 	 * Prepare SCTLR
 	 */
+/* IAMROOT:
+SCTLR_ELx_M - M, bit [0] MMU enable for EL1&0 stage 1 address translation.
+SCTLR_ELx_C - C, bit [2] Stage 1 Cacheability control, for data accesses.
+SCTLR_ELx_I - I, bit [12] Stage 1 instruction access Cacheability control, for accesses at EL0 and EL1:
+** EL0 Trap을 끄는 설정에 대해서 추후 재 확인 필요 **
+*/
 	mov_q	x0, INIT_SCTLR_EL1_MMU_ON
 	ret					// return to head.S
 

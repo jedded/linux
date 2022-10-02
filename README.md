@@ -34,13 +34,13 @@ sudo qemu-system-aarch64 -M virt -smp 4 -m 1024 -cpu cortex-a57 -nographic \
 
 ### 19주차
 - 2022.09.24, Zoom 온라인 (13명 참석)
--. __cpu_setup@arch/arm64/mm/proc.S 진행 중
+- __cpu_setup@arch/arm64/mm/proc.S 진행 중
 
 ### 18주차
 - 2022.09.17, Zoom 온라인 (7명 참석)
 - .macro map_memory, .macro compute_indices, .macro populate_entries 완료
 - ARM리눅스커널 2.1.5 CPU 초기화
--. __cpu_setup@arch/arm64/mm/proc.S 분석 시작
+- __cpu_setup@arch/arm64/mm/proc.S 분석 시작
 
 ### 17주차
 - 2022.09.03, Zoom 온라인 (14명 참석)

@@ -377,7 +377,7 @@ create_table 매크로는 다음 페이지를 가리키는 하나의 엔트리�
 	bic \count, \phys, #SWAPPER_BLOCK_SIZE - 1
 	populate_entries \tbl, \count, \istart, \iend, \flags, #SWAPPER_BLOCK_SIZE, \tmp
 	.endm
-	
+
 /*
  * Setup the initial page tables. We only setup the barest amount which is
  * required to get the kernel running. The following sections are required:
@@ -1002,22 +1002,26 @@ SYM_FUNC_END(__secondary_too_slow)
  * If it isn't, park the CPU
  */
 SYM_FUNC_START(__enable_mmu)
-	mrs	x2, ID_AA64MMFR0_EL1
-	ubfx	x2, x2, #ID_AA64MMFR0_TGRAN_SHIFT, 4
-	cmp     x2, #ID_AA64MMFR0_TGRAN_SUPPORTED_MIN
+	mrs	x2, ID_AA64MMFR0_EL1                      // AArch64 Memory Model Feature Register 0
+	ubfx	x2, x2, #ID_AA64MMFR0_TGRAN_SHIFT, 4  // == 28, TGran4, bits [31;28] Indicates support for 4KB memory translation granule size.
+	cmp     x2, #ID_AA64MMFR0_TGRAN_SUPPORTED_MIN // == 0, 4KB granule supported
 	b.lt    __no_granule_support
-	cmp     x2, #ID_AA64MMFR0_TGRAN_SUPPORTED_MAX
+	cmp     x2, #ID_AA64MMFR0_TGRAN_SUPPORTED_MAX // == 7, 4KB granule not supported
 	b.gt    __no_granule_support
-	update_early_cpu_boot_status 0, x2, x3
+	update_early_cpu_boot_status 0, x2, x3        // __early_cpu_boot_status 에 저장, 최신 버전에서는 삭제됨
+/* IAMROOT:
+ * ttbr0_el1 : user용이지만 부팅중에는 임시로 idmap으로 사용한다.
+ * ttbr1_el1 : kernel용이며 init_pg_dir을 가리킨다.
+ */
 	adrp	x2, idmap_pg_dir
 	phys_to_ttbr x1, x1
 	phys_to_ttbr x2, x2
-	msr	ttbr0_el1, x2			// load TTBR0
+	msr	ttbr0_el1, x2			// load TTBR0, x2 = idmap_pg_dir
 	offset_ttbr1 x1, x3
-	msr	ttbr1_el1, x1			// load TTBR1
+	msr	ttbr1_el1, x1			// load TTBR1, x1 = init_pg_dir
 	isb
 
-	set_sctlr_el1	x0
+	set_sctlr_el1	x0          // mov_q	x0, INIT_SCTLR_EL1_MMU_ON
 
 	ret
 SYM_FUNC_END(__enable_mmu)
@@ -1042,6 +1046,13 @@ SYM_FUNC_START(__cpu_secondary_check52bitva)
 2:	ret
 SYM_FUNC_END(__cpu_secondary_check52bitva)
 
+/* IAMROOT:
+arch/arm64/include/asm/smp.h:19
+The cpu couldn't die gracefully and is looping in the kernel
+#define CPU_STUCK_IN_KERNEL		(2)
+#define CPU_STUCK_REASON_NO_GRAN	(UL(2) << CPU_STUCK_REASON_SHIFT)
+__early_cpu_boot_status에 저장
+*/
 SYM_FUNC_START_LOCAL(__no_granule_support)
 	/* Indicate that this CPU can't boot and is stuck in the kernel */
 	update_early_cpu_boot_status \
