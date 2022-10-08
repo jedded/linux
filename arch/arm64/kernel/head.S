@@ -707,11 +707,11 @@ SYM_FUNC_END(__create_page_tables)
 	stp	xzr, xzr, [sp, #S_STACKFRAME]
 	add	x29, sp, #S_STACKFRAME
 
-	scs_load \tsk
+	scs_load \tsk                     // CONFIG_SHADOW_CALL_STACK - 함수반환주소 overflow를 방지하는 기능
 
-	adr_l	\tmp1, __per_cpu_offset
-	ldr	w\tmp2, [\tsk, #TSK_TI_CPU]
-	ldr	\tmp1, [\tmp1, \tmp2, lsl #3]
+	adr_l	\tmp1, __per_cpu_offset   // unsigned long __per_cpu_offset[NR_CPUS] [mm/percpu.c;3374]
+	ldr	w\tmp2, [\tsk, #TSK_TI_CPU]   // task_struct->thread_info.cpu
+	ldr	\tmp1, [\tmp1, \tmp2, lsl #3] // 
 	set_this_cpu_offset \tmp1
 	.endm
 
@@ -1069,6 +1069,17 @@ SYM_FUNC_START_LOCAL(__relocate_kernel)
 	 * Iterate over each entry in the relocation table, and apply the
 	 * relocations in place.
 	 */
+/* IAMROOT:
+arch/arm64/kernel/vmlinux.lds.S:259
+	.rela.dyn : ALIGN(8) {
+		*(.rela .rela*)
+	}
+	__rela_offset	= ABSOLUTE(ADDR(.rela.dyn) - KIMAGE_VADDR);
+	__rela_size	= SIZEOF(.rela.dyn);
+x23 : compile time에 계산된 kernel 주소의 2MB 정렬의 나머지값.
+relocate start address(x9) = x23(0) + KIMAGE_VADDR(x11) + __rela_offset(w9)
+relocate end address(x10) = x9 + __rela_size(w10)
+*/
 	ldr	w9, =__rela_offset		// offset to reloc table
 	ldr	w10, =__rela_size		// size of reloc table
 
@@ -1077,11 +1088,18 @@ SYM_FUNC_START_LOCAL(__relocate_kernel)
 	add	x9, x9, x11			// __va(.rela)
 	add	x10, x9, x10			// __va(.rela) + sizeof(.rela)
 
+/* IAMROOT:
+elf 스펙상 현재 Table Entry를 24byte씩 사용한다.
+ *  x12 = [x9];
+ *  x13 = [x9, 8];
+ *  x9 += 24;
+ *  x14 = [x9 - 8];
+*/
 0:	cmp	x9, x10
-	b.hs	1f
-	ldp	x12, x13, [x9], #24
-	ldr	x14, [x9, #-8]
-	cmp	w13, #R_AARCH64_RELATIVE
+	b.hs	1f                   // if(x9 > x10) goto 1f
+	ldp	x12, x13, [x9], #24      // [x9] 주소에서 24 bytes 적재
+	ldr	x14, [x9, #-8]           // x12(offset) | x13(info{type}) | x14(addend)
+	cmp	w13, #R_AARCH64_RELATIVE // if (type == R_AARCH64_RELATIVE(0x403))
 	b.ne	0b
 	add	x14, x14, x23			// relocate
 	str	x14, [x12, x23]
@@ -1181,7 +1199,7 @@ SYM_FUNC_START_LOCAL(__primary_switch)
 #ifdef CONFIG_RELR
 	mov	x24, #0				// no RELR displacement yet
 #endif
-	bl	__relocate_kernel
+	bl	__relocate_kernel   // 이 함수를 수행해야 .rela.dyn에서 ""=__primary_switched"를 채워줌
 #ifdef CONFIG_RANDOMIZE_BASE
 	ldr	x8, =__primary_switched
 	adrp	x0, __PHYS_OFFSET
