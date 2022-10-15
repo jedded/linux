@@ -698,21 +698,33 @@ SYM_FUNC_END(__create_page_tables)
 	 * for consistency with user tasks and kthreads.
 	 */
 	.macro	init_cpu_task tsk, tmp1, tmp2
+/* IAMROOT:
+sp_el0는 유저 공간으로 context switch 된 후 유저용 스택 위치를 가리키는 용도로 사용된다.
+그러나 커널(el1)에서는 사용하지 않는 스크래치 레지스터 용도일 뿐이므로 이를 활용하여
+thread_info를 가리키는 레지스터로 사용
+https://github.com/torvalds/linux/commit/6cdf9c7ca687e01840d0215437620a20263012fc
+sp_el0는 유저에서 커널 모드 들어올 때 현재 태스크를 저장하고 커널 모드에서
+현재 thread_info 를 빠르게 알아내는 용도로 사용되는데 사용된다.
+커널모드에서 sp_el0는 스택과는 관련이 없다.
+커널모드 스택은 sp 니모닉으로 바로 접근하며 이때 sp는 sp_el1이다.
+sp_el0, sp_el1에 user, kernel에서 사용할 stack 주소를 넣어주고
+spsel을 통해서 sp를 뭘쓸지 정해주면 sp가 자동으로 sp_el0, sp_el1에 설정했던 주소로 바꿈
+*/
 	msr	sp_el0, \tsk
 
-	ldr	\tmp1, [\tsk, #TSK_STACK]
-	add	sp, \tmp1, #THREAD_SIZE
-	sub	sp, sp, #PT_REGS_SIZE
+	ldr	\tmp1, [\tsk, #TSK_STACK]     // TSK_STACK = 32 = offsetof(struct task_struct, stack)
+	add	sp, \tmp1, #THREAD_SIZE       // THREAD_SIZE = 0x4000 (16KB)
+	sub	sp, sp, #PT_REGS_SIZE         // PT_REGS_SIZE = 336 = sizeof(struct pt_regs)
 
-	stp	xzr, xzr, [sp, #S_STACKFRAME]
+	stp	xzr, xzr, [sp, #S_STACKFRAME] // S_STACKFRAME = offsetof(struct pt_regs, stackframe), u64 stackframe[2]
 	add	x29, sp, #S_STACKFRAME
 
 	scs_load \tsk                     // CONFIG_SHADOW_CALL_STACK - 함수반환주소 overflow를 방지하는 기능
 
 	adr_l	\tmp1, __per_cpu_offset   // unsigned long __per_cpu_offset[NR_CPUS] [mm/percpu.c;3374]
-	ldr	w\tmp2, [\tsk, #TSK_TI_CPU]   // task_struct->thread_info.cpu
-	ldr	\tmp1, [\tmp1, \tmp2, lsl #3] // 
-	set_this_cpu_offset \tmp1
+	ldr	w\tmp2, [\tsk, #TSK_TI_CPU]   // TSK_TI_CPU = 16 = task_struct->thread_info.cpu
+	ldr	\tmp1, [\tmp1, \tmp2, lsl #3]
+	set_this_cpu_offset \tmp1         // 현재 cpu번호를 tpidr register에 저장
 	.endm
 
 /*
@@ -724,6 +736,9 @@ SYM_FUNC_START_LOCAL(__primary_switched)
 	adr_l	x4, init_task
 	init_cpu_task x4, x5, x6
 
+/* IAMROOT:
+kernel용 vector table 주소 설정. vectors 위치 : kernel/entry.S
+*/
 	adr_l	x8, vectors			// load VBAR_EL1 with virtual
 	msr	vbar_el1, x8			// vector table address
 	isb
@@ -1201,7 +1216,7 @@ SYM_FUNC_START_LOCAL(__primary_switch)
 #endif
 	bl	__relocate_kernel   // 이 함수를 수행해야 .rela.dyn에서 ""=__primary_switched"를 채워줌
 #ifdef CONFIG_RANDOMIZE_BASE
-	ldr	x8, =__primary_switched
+	ldr	x8, =__primary_switched // 현재 TTBR0에서 TTBR1의 __primary_switched 주소를 접근하기 위하여 ldr 사용
 	adrp	x0, __PHYS_OFFSET
 	blr	x8
 
@@ -1224,7 +1239,7 @@ SYM_FUNC_START_LOCAL(__primary_switch)
 	bl	__relocate_kernel
 #endif
 #endif
-	ldr	x8, =__primary_switched
-	adrp	x0, __PHYS_OFFSET
+	ldr	x8, =__primary_switched  // x8 == 0xffffffc0084a02a4
+	adrp	x0, __PHYS_OFFSET    // __PHYS_OFFSET == 0x40200000 
 	br	x8
 SYM_FUNC_END(__primary_switch)
