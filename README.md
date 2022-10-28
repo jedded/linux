@@ -27,6 +27,11 @@ sudo qemu-system-aarch64 -M virt -smp 4 -m 1024 -cpu cortex-a57 -nographic \
 
 - 첫 모임: 2022년 5월 7일 (zoom online)
 
+### 23주차
+- 2022.10.22, Zoom 온라인 (6명 참석)
+- ARM리눅스커널 3.1.2, 3.2.1
+- __primary_switched - early_fdt_map 분석 중
+
 ### 22주차
 - 2022.10.15, Zoom 온라인 (8명 참석)
 - __primary_switched 분석 중

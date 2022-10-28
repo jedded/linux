@@ -65,7 +65,7 @@
 	tbnz	x0, #THREAD_SHIFT, 0f
 	sub	x0, sp, x0			// x0'' = sp' - x0' = (sp + x0) - sp = x0
 	sub	sp, sp, x0			// sp'' = sp' - x0 = (sp + x0) - x0 = sp
-	b	el\el\ht\()_\regsize\()_\label
+	b	el\el\ht\()_\regsize\()_\label // el1t_64_sync
 
 0:
 	/*

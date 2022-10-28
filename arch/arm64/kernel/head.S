@@ -748,6 +748,10 @@ kernel용 vector table 주소 설정. vectors 위치 : kernel/entry.S
 
 	str_l	x21, __fdt_pointer, x5		// Save FDT pointer
 
+/* IRMROOT:
+kimage_voffset = kimage_vaddr - __PHYS_OFFSET
+kimage_voffset = va(_text) - pa(_text) # 이미지의 가상 주소와 물리 주소의 변환 API에 활용
+*/
 	ldr_l	x4, kimage_vaddr		// Save the offset between
 	sub	x4, x4, x0			// the kernel virtual and
 	str_l	x4, kimage_voffset, x5		// physical mappings
