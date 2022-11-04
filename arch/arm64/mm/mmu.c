@@ -1322,6 +1322,12 @@ void __set_fixmap(enum fixed_addresses idx,
 	}
 }
 
+/*
+ * IAMROOT-18, 2021.10.14:
+ * 부트로더가 전달해준 fdt의 물리주소(dt_phys)를
+ * fixmap 영역 4MB(실제론 2MB, 나머지 2MB는 align.)
+ * 에 매핑하여 가상주소를 얻어오는 기능을 수행한다.
+ */
 void *__init fixmap_remap_fdt(phys_addr_t dt_phys, int *size, pgprot_t prot)
 {
 	const u64 dt_virt_base = __fix_to_virt(FIX_FDT);
@@ -1364,6 +1370,10 @@ void *__init fixmap_remap_fdt(phys_addr_t dt_phys, int *size, pgprot_t prot)
 	if (fdt_magic(dt_virt) != FDT_MAGIC)
 		return NULL;
 
+/*
+ * IAMROOT, 2021.10.09: 
+ * size를 알아온 후 나머지 매핑되지 않은 부분이 있는 경우 다시 매핑한다.
+ */
 	*size = fdt_totalsize(dt_virt);
 	if (*size > MAX_FDT_SIZE)
 		return NULL;
