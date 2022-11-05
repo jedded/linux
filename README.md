@@ -1,0 +1,90 @@
+# 최신 ARM64 리눅스 커널 5.19 분석
+
+## 커뮤니티: IAMROOT 19차
+- [www.iamroot.org][#iamroot] | IAMROOT 홈페이지
+- [jake.dothome.co.kr][#moonc] | 문c 블로그
+
+[#iamroot]: http://www.iamroot.org
+[#moonc]: http://jake.dothome.co.kr
+
+## \# How to build and run
+```
+$ sudo apt install -y build-essential gcc-aarch64-linux-gnu g++-aarch64-linux-gnu git bison flex libssl-dev libncurses-dev  
+$ make CROSS_COMPILE=aarch64-linux-gnu- ARCH=arm64 arm64_qemu_defconfig
+$ make CROSS_COMPILE=aarch64-linux-gnu- ARCH=arm64
+$ sudo apt install -y qemu-system-arm
+```
+-> [rootfs download](http://downloads.yoctoproject.org/releases/yocto/yocto-4.0/machines/qemu/qemuarm64/core-image-minimal-qemuarm64-20220416133845.rootfs.ext4)
+```
+sudo qemu-system-aarch64 -M virt -smp 4 -m 1024 -cpu cortex-a57 -nographic \
+  -kernel linux/arch/arm64/boot/Image \
+  -append 'root=/dev/vda rw rootwait mem=1024M loglevel=8 console=ttyAMA0' \
+  -netdev user,id=net0 \
+  -device virtio-net-device,netdev=net0 \
+  -drive if=none,id=disk,file=core-image-minimal-qemuarm64-20220416133845.rootfs.ext4,format=raw \
+  -device virtio-blk-device,drive=disk
+```
+## \# History
+
+- 첫 모임: 2022년 5월 7일 (zoom online)
+
+### 25주차
+- 2022.11.05, Zoom 온라인 (7명 참석)
+- init_feature_override, kaslr_early_init, switch_to_vhe 분석 완료
+
+### 24주차
+- 2022.10.29, Zoom 온라인 (8명 참석)
+- early_fixmap_init@arch/arm64/mm/mmu.c 분석 완료
+- fixmap_remap_fdt@arch/arm64/mm/mmu.c 분석 완료
+- early_fdt_map@arch/arm64/kernel/setup.c 분석 완료
+
+### 23주차
+- 2022.10.22, Zoom 온라인 (6명 참석)
+- ARM리눅스커널 3.1.2, 3.2.1
+- __primary_switched - early_fdt_map 분석 중
+
+### 22주차
+- 2022.10.15, Zoom 온라인 (8명 참석)
+- __primary_switched 분석 중
+- arch/arm64/kernel/entry.S Exception 관련 내용 분석 중 (kernel_ventry)
+
+### 21주차
+- 2022.10.08, Zoom 온라인 (8명 참석)
+- __primary_switch 분석 완료
+- __primary_switched 분석 시작
+
+### 20주차
+- 2022.10.01, Zoom 온라인 (6명 참석)
+- __cpu_setup@arch/arm64/mm/proc.S 완료
+- __primary_switch 분석 시작
+
+### 19주차
+- 2022.09.24, Zoom 온라인 (13명 참석)
+- __cpu_setup@arch/arm64/mm/proc.S 진행 중
+
+### 18주차
+- 2022.09.17, Zoom 온라인 (7명 참석)
+- .macro map_memory, .macro compute_indices, .macro populate_entries 완료
+- ARM리눅스커널 2.1.5 CPU 초기화
+- __cpu_setup@arch/arm64/mm/proc.S 분석 시작
+
+### 17주차
+- 2022.09.03, Zoom 온라인 (14명 참석)
+- __create_page_tables 완료
+
+### 16주차
+- 2022.08.27, Zoom 온라인 (11명 참석)
+- 코드로 알아보는 ARM 리눅스 커널 : 2.1.3 ~ 2.1.4
+- set_cpu_boot_mode_flag 완료
+- __create_page_tables 분석 시작
+- **Discord 새로 시작**
+
+### 15주차
+- 2022.08.20, Zoom 온라인
+- 코드로 알아보는 ARM 리눅스 커널 : 2.1 ~ 2.1.2
+- dcache_inval_poc, init_kernel_el 완료
+
+### 14주차
+- 2022.08.13, Zoom 온라인
+- 첫 Linux kernel v5.19 source code 분석 시작
+- preserve_boot_args 완료
