@@ -28,6 +28,13 @@ sudo qemu-system-aarch64 -M virt -smp 4 -m 1024 -cpu cortex-a57 -nographic \
 
 - 첫 모임: 2022년 5월 7일 (zoom online)
 
+
+### 26주차
+- 2022.11.12, Zoom 온라인 (9명 참석)
+- start_kernel 시작
+- local_irq_disable까지 분석 완료
+- start_kernel 이후 스터디 방법 논의
+
 ### 25주차
 - 2022.11.05, Zoom 온라인 (7명 참석)
 - init_feature_override, kaslr_early_init, switch_to_vhe 분석 완료
