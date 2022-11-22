@@ -29,6 +29,12 @@ sudo qemu-system-aarch64 -M virt -smp 4 -m 1024 -cpu cortex-a57 -nographic \
 - 첫 모임: 2022년 5월 7일 (zoom online)
 
 
+### 27주차
+- 2022.11.19, 오프라인 (3명 참석), Zoom 온라인 (5명 참석)
+- IARMROOT 16기 Seminar 참석
+- start_kernel 이후 스터디 방법 재논의
+- struct thread_info 분석
+
 ### 26주차
 - 2022.11.12, Zoom 온라인 (9명 참석)
 - start_kernel 시작
