@@ -29,6 +29,14 @@ sudo qemu-system-aarch64 -M virt -smp 4 -m 1024 -cpu cortex-a57 -nographic \
 - 첫 모임: 2022년 5월 7일 (zoom online)
 
 
+### 29주차
+- 2022.12.03, Zoom 온라인 (7명 참석)
+- MM Overview Seminar (유형곤)
+
+### 28주차
+- 2022.11.26, Zoom 온라인 (9명 참석)
+- MM Overview Seminar (유형곤)
+
 ### 27주차
 - 2022.11.19, 오프라인 (3명 참석), Zoom 온라인 (5명 참석)
 - IARMROOT 16기 Seminar 참석
