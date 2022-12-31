@@ -27,7 +27,18 @@ sudo qemu-system-aarch64 -M virt -smp 4 -m 1024 -cpu cortex-a57 -nographic \
 ## \# History
 
 - 첫 모임: 2022년 5월 7일 (zoom online)
+- ARM 리눅스 커널 3.3.3 vmap_area 할당 ~ 3.3 끝
+- vmap() 분석 중
+- vmap()->get_vm_area_caller()->alloc_vmap_area() 분석 완료
+- vmap()->get_vm_area_caller()->alloc_vmap_area()->__alloc_vmap_area 분석 예정
 
+### 33주차
+- 2022.12.31, Zoom 온라인 (7명 참석)
+- ARM 리눅스 커널 3.3.3 vmap_area 할당 ~ 3.3.4 vunmap
+
+### 32주차
+- 2022.12.24
+- 크리스마스 휴식
 
 ### 31주차
 - 2022.12.17, Zoom 온라인 (11명 참석)
