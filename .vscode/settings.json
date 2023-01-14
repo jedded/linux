@@ -1,0 +1,9 @@
+{
+    "files.exclude": {
+        "**/.*.*.cmd": true,
+        "**/.*.d": true,
+        "**/.*.o": true,
+        "**/cscope.out": true,
+        "**/tags": true
+    }
+}
