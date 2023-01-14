@@ -28,6 +28,15 @@ sudo qemu-system-aarch64 -M virt -smp 4 -m 1024 -cpu cortex-a57 -nographic \
 
 - 첫 모임: 2022년 5월 7일 (zoom online)
 
+### 36주차
+- 2023.01.21
+- 명절 휴식
+
+### 35주차
+- 2023.01.14, Zoom 온라인 (8명 참석)
+- vmap() 분석 완료
+- vunmap() 분석 예정
+
 ### 34주차
 - 2023.01.07, Zoom 온라인 (9명 참석)
 - vmap() 분석 중
