@@ -29,6 +29,11 @@ sudo qemu-system-aarch64 -M virt -smp 4 -m 1024 -cpu cortex-a57 -nographic \
 - 첫 모임: 2022년 5월 7일 (zoom online)
 
 ### 36주차
+- 2023.01.28, Zoom 온라인 (8명 참석)
+- vunmap() 분석 완료
+- ARM 리눅스 커널 3.4 ~ 3.4.1 ioremap
+
+### 36주차
 - 2023.01.21
 - 명절 휴식
 
