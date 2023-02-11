@@ -28,6 +28,11 @@ sudo qemu-system-aarch64 -M virt -smp 4 -m 1024 -cpu cortex-a57 -nographic \
 
 - 첫 모임: 2022년 5월 7일 (zoom online)
 
+### 38주차
+- 2023.02.11, Zoom 온라인 (9명 참석)
+- ARM 리눅스 커널 3.5 vmemmap ~ 4.1.3 memblock 할당과 해제
+- vmemmap_populate() 분석 완료
+
 ### 37주차
 - 2023.02.04, Zoom 온라인 (10명 참석)
 - ARM 리눅스 커널 3.4 I/O 메모리 매핑(ioremap) 읽음
