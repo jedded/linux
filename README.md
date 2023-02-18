@@ -28,6 +28,10 @@ sudo qemu-system-aarch64 -M virt -smp 4 -m 1024 -cpu cortex-a57 -nographic \
 
 - 첫 모임: 2022년 5월 7일 (zoom online)
 
+### 39주차
+- 2023.02.18, Zoom 온라인 (10명 참석)
+- ARM 리눅스 커널 4.1.4 memblock 추가 ~ 4.3.1 존 타입
+
 ### 38주차
 - 2023.02.11, Zoom 온라인 (9명 참석)
 - ARM 리눅스 커널 3.5 vmemmap ~ 4.1.3 memblock 할당과 해제
