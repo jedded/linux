@@ -28,6 +28,10 @@ sudo qemu-system-aarch64 -M virt -smp 4 -m 1024 -cpu cortex-a57 -nographic \
 
 - 첫 모임: 2022년 5월 7일 (zoom online)
 
+### 42주차 
+- 2023.03.12 Zoom 온라인
+- ARM 리눅스 커널 4.3.3 vmemmap을 사용하는 sparse 메모리모델 (~304쪽)
+
 ### 40주차, 41주차
 - 2023.02.24, 2023.03.04. Zoom 온라인
 - ARM 리눅스 커널 4.3.2 부트 메모리 초기화
