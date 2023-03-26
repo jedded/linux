@@ -28,6 +28,14 @@ sudo qemu-system-aarch64 -M virt -smp 4 -m 1024 -cpu cortex-a57 -nographic \
 
 - 첫 모임: 2022년 5월 7일 (zoom online)
 
+### 44주차 
+- 2023.03.25 Zoom 온라인
+- ARM 리눅스 커널 4.2 memblock_double_array() ~ 4.3 전까지 코드분석, 3.1 ~ 3.1.3 map_kernel() 책 읽기 (~137쪽)
+
+### 43주차 
+- 2023.03.18 Zoom 온라인
+- ARM 리눅스 커널 4.1.4 ~ 4.2 memblock_double_array() 코드분석 (~237쪽)
+
 ### 42주차 
 - 2023.03.12 Zoom 온라인
 - ARM 리눅스 커널 4.3.3 vmemmap을 사용하는 sparse 메모리모델 (~304쪽)
